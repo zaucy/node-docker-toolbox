@@ -1,0 +1,22 @@
+{
+  "name": "docker-toolbox",
+  "version": "0.0.1",
+  "description": "wrapper for docker-compose and docker-machine",
+  "main": "lib/index",
+  "repository": "https://github.com/zaucy/node-docker-toolbox.git",
+  "author": "Ezekiel Warren",
+  "license": "MIT",
+  "scripts": {
+    "test": "ts-mocha test/**/*.ts src/**/*.spec.ts",
+    "start": "node lib/index",
+    "build": "tsc -p tsconfig.release.json",
+    "dev": "tsc-watch --onSuccess \"node --require source-map-support/register ./lib/index.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^10.5.0",
+    "mocha": "^5.2.0",
+    "ts-mocha": "^1.2.0",
+    "tsc-watch": "^1.0.22",
+    "typescript": "^2.9.2"
+  }
+}
