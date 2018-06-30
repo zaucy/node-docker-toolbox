@@ -1,0 +1,10 @@
+{
+  "out": "./docs",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "exclude": "*.spec.ts",
+  "excludeNotExported": true,
+  "mode": "modules",
+  "includes": "src",
+  "module": "commonjs"
+}

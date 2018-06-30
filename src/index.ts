@@ -559,6 +559,9 @@ export interface IDockerComposeVersionOptions {
   short?: boolean;
 }
 
+/**
+ * @see https://docs.docker.com/compose/reference/overview/
+ */
 export class DockerCompose {
 
   private _machine?: DockerMachine;
@@ -580,6 +583,9 @@ export class DockerCompose {
     }
   }
 
+  /**
+   * @internal
+   */
   _spawn(command: string, args: string[]): DockerToolboxPromise<void> {
     const configArgs = this._configPaths
       .map(confPath => ['-f', confPath])
@@ -594,6 +600,9 @@ export class DockerCompose {
     return spawnDockerCompose(allArgs, {env});
   }
 
+  /**
+   * @internal
+   */
   _serviceCommandSpawn(
     command: string,
     ...args: any[]
