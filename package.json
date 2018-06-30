@@ -12,12 +12,14 @@
     "build": "tsc -p tsconfig.release.json",
     "prepublishOnly": "rimraf lib && yarn build && yarn docs && git add docs",
     "dev": "tsc-watch --onSuccess \"node --require source-map-support/register ./lib/index.js\"",
-    "docs": "typedoc --options typedoc.json ./src"
+    "docs": "typedoc --options typedoc.json ./src",
+    "release": "np --no-yarn"
   },
   "devDependencies": {
     "@types/node": "^10.5.0",
     "ava": "1.0.0-beta.6",
     "mocha": "^5.2.0",
+    "np": "^3.0.4",
     "rimraf": "^2.6.2",
     "ts-mocha": "^1.2.0",
     "ts-node": "^7.0.0",
