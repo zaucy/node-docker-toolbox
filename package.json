@@ -12,8 +12,7 @@
     "build": "tsc -p tsconfig.release.json",
     "prepublishOnly": "rimraf lib && yarn build && yarn docs && git add docs",
     "dev": "tsc-watch --onSuccess \"node --require source-map-support/register ./lib/index.js\"",
-    "docs": "typedoc --options typedoc.json ./src",
-    "release": "np --no-yarn"
+    "docs": "typedoc --options typedoc.json ./src"
   },
   "devDependencies": {
     "@types/node": "^10.5.0",

@@ -4,3 +4,4 @@
 /ava.config.js
 /typedoc.json
 /CNAME
+!/lib/*
