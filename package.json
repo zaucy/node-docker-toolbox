@@ -22,5 +22,8 @@
     "ts-node": "^7.0.0",
     "tsc-watch": "^1.0.22",
     "typescript": "^2.9.2"
+  },
+  "dependencies": {
+    "rxjs": "^6.2.1"
   }
 }

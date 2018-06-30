@@ -1,9 +1,15 @@
 import {spawn, ChildProcess, SpawnOptions} from 'child_process';
 import {optionsToArgs, IOptionsToArgsParseOptions} from './util';
+import {Observable, Subject} from 'rxjs';
+import {Readable, Writable} from 'stream';
 
 export interface DockerToolboxPromise<T> extends Promise<T> {
   childProcess: ChildProcess;
 };
+
+export interface DockerToolboxObservable<T> extends Observable<T> {
+  childProcess: ChildProcess;
+}
 
 function makeDtPromise<T>
   ( promise: Promise<T>
@@ -13,6 +19,16 @@ function makeDtPromise<T>
   (<DockerToolboxPromise<T>>promise).childProcess = childProcess;
 
   return (<DockerToolboxPromise<T>>promise);
+}
+
+function makeDtObservable<T>
+  ( observable: Observable<T>
+  , childProcess: ChildProcess
+  ): DockerToolboxObservable<T>
+{
+  (<DockerToolboxObservable<T>>observable).childProcess = childProcess;
+
+  return (<DockerToolboxObservable<T>>observable);
 }
 
 function _spawnDockerToolbox
@@ -63,6 +79,55 @@ function spawnDockerMachine
   return _spawnDockerToolbox('docker-machine', args, spawnOptions);
 }
 
+class LineReadStream extends Readable {
+  private _readStream: Readable;
+
+  constructor(readStream: Readable) {
+    super();
+
+    this._readStream = readStream;
+  }
+
+  _read(size: number) {
+    let currentLine = "";
+
+    const chunkHandler = chunk => {
+      let chunkStr = chunk.toString();
+      let newLineIndex = -1;
+
+      do {
+        newLineIndex = chunkStr.indexOf('\n');
+
+        if(newLineIndex > -1) {
+          currentLine += chunkStr.substr(0, newLineIndex);
+          chunkStr = chunkStr.substr(newLineIndex);
+          let shouldContinue = this.push(currentLine);
+          currentLine = "";
+
+          if(!shouldContinue) {
+            this._readStream.off('data', chunkHandler);
+            return;
+          }
+        } else {
+          currentLine += chunkStr;
+          break;
+        }
+      } while(newLineIndex > -1);
+    };
+
+    this._readStream.on('data', chunkHandler);
+  }
+}
+
+export interface IDockerComposeEvent {
+  time: string;
+  type: string;
+  action: string;
+  id: string;
+  service: string;
+  attributes?: {[key:string]: string};
+}
+
 export interface IDockerComposeOptions {
   
   /**
@@ -108,6 +173,392 @@ export interface IDockerComposeBuildOptions {
   buildArgs?: {[key:string]: string|number|boolean};
 }
 
+export interface IDockerComposeBundleOptions {
+  /**
+   * Automatically push images for any services which have a `build` option 
+   * specified.
+   */
+  pushImage?: boolean;
+
+  /**
+   * Path to write the bundle file to. Defaults to "<project name>.dab".
+   */
+  outout?: string;
+}
+
+export interface IDockerComposeConfigOptions {
+  /**
+   * Pin image tags to digests.
+   */
+  resolveImageDigests?: boolean;
+  /**
+   * Only validate the configuration, don't print anything.
+   */
+  quiet?: boolean;
+
+  /**
+   * Print the service names, one per line.
+   */
+  services?: boolean;
+
+  /**
+   * Print the volume names, one per line.
+   */
+  volumes?: boolean;
+}
+
+export interface IDockerComposeDownOptions {
+  /**
+   * Remove images. Type must be one of:
+      'all': Remove all images used by any service.
+      'local': Remove only images that don't have a custom tag set by the 
+      `image` field.
+   */
+  rmi?: 'all'|'local';
+
+  /**
+   * Remove named volumes declared in the `volumes` section of the Compose file 
+   * and anonymous volumes attached to containers.
+   */
+  volumes?: boolean;
+
+  /**
+   * Remove containers for services not defined in the Compose file
+   */
+  removeOrphans?: boolean;
+
+  /**
+   * Specify a shutdown timeout in seconds. (default: 10)
+   */
+  timeout?: number;
+}
+
+export interface IDockerComposeExecOptions {
+  /**
+   * Detached mode: Run command in the background.
+   */
+  detach?: boolean;
+
+  /**
+   * Give extended privileges to the process.
+   */
+  privileged?: boolean;
+
+  /**
+   * Run the command as this user.
+   */
+  user?: string;
+
+  /**
+   * Disable pseudo-tty allocation. By default `exec()` allocates a TTY. This is
+   * equivalent `docker-compose exec -T`
+   */
+  disablePseudoTty?: boolean;
+
+  /**
+   * index of the container if there are multiple instances of a service 
+   * [default: 1]
+   */
+  index?: number;
+
+  /**
+   * Set environment variables (can be used multiple times, not supported in 
+   * API < 1.25)
+   */
+  env?: {[key:string]: string|number}
+
+  /**
+   * Path to workdir directory for this command.
+   */
+  workdir?: string;
+}
+
+export interface IDockerComposeLogsOptions {
+  /**
+   * Produce monochrome output.
+   */
+  noColor?: boolean;
+
+  /**
+   * Follow log output.
+   */
+  follow?: boolean;
+
+  /**
+   * Show timestamps.
+   */
+  timestamps?: boolean;
+
+  /**
+   * Number of lines to show from the end of the logs for each container.
+   */
+  tail: 'all'|number;
+}
+
+export interface IDockerComposePsOptions {
+  /**
+   * Only display IDs
+   */
+  quiet?: boolean;
+
+  /**
+   * Display services
+   */
+  services?: boolean;
+
+  /**
+   * Filter services by a property. Format KEY=VAL
+   */
+  filter?: string;
+}
+
+export interface IDockerComposeKillOptions {
+  /**
+   * SIGNAL to send to the container. Default signal is SIGKILL.
+   */
+  signal?: string;
+}
+
+export interface IDockerComposePullOptions {
+
+  /**
+   * Pull what it can and ignores images with pull failures.
+   */
+  ignorePullFailures?: boolean;
+
+  /**
+   * Disable parallel pulling.
+   */
+  noParallel?: boolean;
+
+  /**
+   * Pull without printing progress information
+   */
+  quiet?: boolean;
+
+  /**
+   * Also pull services declared as dependencies
+   */
+  includeDeps?: boolean;
+}
+
+export interface IDockerComposePushOptions {
+  /**
+   * Push what it can and ignores images with push failures.
+   */
+  ignorePushFailures?: boolean;
+}
+
+export interface IDockerComposeRestartOptions {
+  /**
+   * Specify a shutdown timeout in seconds. (default: 10)
+   */
+  timeout?: number;
+}
+
+export interface IDockerComposeRmOptions {
+  /**
+   * Don't ask to confirm removal
+   */
+  force?: boolean;
+
+  /**
+   * Stop the containers, if required, before removing
+   */
+  stop?: boolean;
+
+  /**
+   * Remove any anonymous volumes attached to containers. This is equivalent to
+   * `docker-compose rm -v`
+   */
+  removeVolumes?: boolean;
+}
+
+export interface IDockerComposeRunOptions {
+
+  /**
+   * Detached mode: Run container in the background, print new container name.
+   */
+  detach?: boolean;
+
+  /**
+   * Assign a name to the container
+   */
+  name?: string;
+
+  /**
+   * Override the entrypoint of the image.
+   */
+  entrypoint?: string;
+
+  /**
+   * Set an environment variable. This is equivalent to
+   * `docker-compose -e KEY=VALUE`
+   */
+  env?: string|number|{[key:string]: string|number};
+
+  /**
+   * Add or override a label
+   */
+  label?: string|number|{[key:string]: string|number};
+
+  /**
+   * Run as specified username or uid
+   */
+  user?: string;
+
+  /**
+   * Don't start linked services.
+   */
+  noDeps?: boolean;
+
+  /**
+   * Remove container after run. Ignored in detached mode.
+   */
+  rm?: boolean;
+
+  /**
+   * Publish a container's port(s) to the host
+   */
+  publish?: number[];
+
+  /**
+   * Run command with the service's ports enabled and mapped to the host.
+   */
+  servicePorts?: boolean;
+
+  /**
+   * Use the service's network aliases in the network(s) the container connects 
+   * to.
+   */
+  useAliases?: boolean;
+
+  /**
+   * Bind mount a volume (default [])
+   */
+  volume?: string[];
+
+  /**
+   * Disable pseudo-tty allocation. By default `docker-compose run` allocates a 
+   * TTY. This is equivalent to `docker-compose run -T`
+   */
+  disablePseudoTty?: boolean;
+
+  /**
+   * Working directory inside the container
+   */
+  workdir?: string;
+}
+
+export interface IDockerComposeScaleOptions {
+  /**
+   * Specify a shutdown timeout in seconds. (default: 10)
+   */
+  timeout?: number;
+}
+
+export interface IDockerComposeStopOptions {
+  /**
+   * Specify a shutdown timeout in seconds. (default: 10)
+   */
+  timeout?: number;
+}
+
+export interface IDockerComposeUpOptions {
+  /**
+   * Detached mode: Run containers in the background, print new container 
+   * names. Incompatible with `abortOnContainerExit`.
+   */
+  detach?: boolean;
+
+  /**
+   * Produce monochrome output.
+   */
+  noColor?: boolean;
+
+  /**
+   * Pull without printing progress information
+   */
+  quietPull?: boolean;
+
+  /**
+   * Don't start linked services
+   */
+  noDeps?: boolean;
+
+  /**
+   * Recreate containers even if their configuration and image haven't changed.
+   */
+  forceRecreate?: boolean;
+
+  /**
+   * Recreate dependent containers. Incompatible with `noRecreate`.
+   */
+  alwaysRecreateDeps?: boolean;
+
+  /**
+   * If containers already exist, don't recreate them. Incompatible with 
+   * `forceRecreate` and `renewAnonVolumes`.
+   */
+  noRecreate?: boolean;
+
+  /**
+   * Don't build an image, even if it's missing.
+   */
+  noBuild?: boolean;
+
+  /**
+   * Don't start the services after creating them.
+   */
+  noStart?: boolean;
+
+  /**
+   * Build images before starting containers.
+   */
+  build?: boolean;
+
+  /**
+   * Stops all containers if any container was stopped. Incompatible with -d.
+   */
+  abortOnContainerExit?: boolean;
+
+  /**
+   * Use this timeout in seconds for container shutdown when attached or when 
+   * containers are already running. (default: 10)
+   */
+  timeout?: number;
+
+  /**
+   * Recreate anonymous volumes instead of retrieving data from the previous 
+   * containers.
+   */
+  renewAnonVolumes?: boolean;
+
+  /**
+   * Remove containers for services not defined in the Compose file.
+   */
+  removeOrphans?: boolean;
+
+  /**
+   * Return the exit code of the selected service container. Implies 
+   * `abortOnContainerExit`.
+   */
+  exitCodeFrom?: string;
+
+  /**
+   * Scale SERVICE to NUM instances. Overrides the `scale` setting in the 
+   * Compose file if present.
+   */
+  scale?: {[key:string]: number};
+}
+
+export interface IDockerComposeVersionOptions {
+  /**
+   * Shows only Compose's version number.
+   */
+  short?: boolean;
+}
+
 export class DockerCompose {
 
   private _machine?: DockerMachine;
@@ -141,6 +592,30 @@ export class DockerCompose {
     }
 
     return spawnDockerCompose(allArgs, {env});
+  }
+
+  _serviceCommandSpawn(
+    command: string,
+    ...args: any[]
+  ): DockerToolboxPromise<void> {
+    let options: any = {};
+    let services: string[] = [];
+
+    if(args.length > 0) {
+      if(typeof args[0] === "string") {
+        services = args;
+      } else {
+        options = args[0];
+      }
+
+      args.splice(0, 1);
+
+      services = args;
+    }
+
+    const optArgs: string[] = optionsToArgs(options);
+
+    return this._spawn(command, [].concat(optArgs, services));
   }
 
   /**
@@ -203,25 +678,686 @@ export class DockerCompose {
   ): DockerToolboxPromise<void>;
 
   build(...args: any[]): DockerToolboxPromise<void> {
-    let options: IDockerComposeBuildOptions = {};
-    let services: string[] = [];
+    return this._serviceCommandSpawn('build', ...args);
+  }
+
+  /**
+   * Generate a Distributed Application Bundle (DAB) from the Compose file.
+   *
+   * Images must have digests stored, which requires interaction with a Docker 
+   * registry. If digests aren't stored for all images, you can fetch them with 
+   * `pull()` or `push()`. To push images automatically when bundling, pass 
+   * `pushImages`. Only services with a `build` option specified will have 
+   * their images pushed. 
+   */
+  bundle(options: IDockerComposeBundleOptions): DockerToolboxPromise<void> {
+    const optArgs: string[] = optionsToArgs(options);
+
+    return this._spawn('bundle', optArgs);
+  }
+
+  /**
+   * Validate and view the Compose file.
+   */
+  config(options: IDockerComposeConfigOptions): DockerToolboxPromise<void> {
+    const optArgs: string[] = optionsToArgs(options);
+
+    return this._spawn('config', optArgs);
+  }
+
+  /**
+   * Stops containers and removes containers, networks, volumes, and images 
+   * created by `up()`.
+   * 
+   * By default, the only things removed are:
+   * 
+   * - Containers for services defined in the Compose file
+   * - Networks defined in the `networks` section of the Compose file
+   * - The default network, if one is used
+   * 
+   * Networks and volumes defined as `external` are never removed.
+   */
+  down(): DockerToolboxPromise<void>;
+
+  /**
+   * Stops containers and removes containers, networks, volumes, and images 
+   * created by `up()`.
+   * 
+   * By default, the only things removed are:
+   * 
+   * - Containers for services defined in the Compose file
+   * - Networks defined in the `networks` section of the Compose file
+   * - The default network, if one is used
+   * 
+   * Networks and volumes defined as `external` are never removed.
+   */
+  down(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * Stops containers and removes containers, networks, volumes, and images 
+   * created by `up()`.
+   * 
+   * By default, the only things removed are:
+   * 
+   * - Containers for services defined in the Compose file
+   * - Networks defined in the `networks` section of the Compose file
+   * - The default network, if one is used
+   * 
+   * Networks and volumes defined as `external` are never removed.
+   */
+  down(options: IDockerComposeDownOptions): DockerToolboxPromise<void>;
+
+  /**
+   * Stops containers and removes containers, networks, volumes, and images 
+   * created by `up()`.
+   * 
+   * By default, the only things removed are:
+   * 
+   * - Containers for services defined in the Compose file
+   * - Networks defined in the `networks` section of the Compose file
+   * - The default network, if one is used
+   * 
+   * Networks and volumes defined as `external` are never removed.
+   */
+  down(options: IDockerComposeDownOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  down(...args: any[]) {
+    return this._serviceCommandSpawn('down', ...args);
+  }
+
+  /**
+   * Receive real time events from containers.
+   */
+  events(): DockerToolboxObservable<IDockerComposeEvent>;
+  
+  /**
+   * Receive real time events from containers.
+   */
+  events(...services: string[]): DockerToolboxObservable<IDockerComposeEvent>;
+
+  events(...services: string[]): DockerToolboxObservable<IDockerComposeEvent> {
+    const eventsSubject = new Subject<IDockerComposeEvent>();
+
+    const eventsPromise = this._serviceCommandSpawn(
+      'events', {json: true}, ...services
+    );
+
+    eventsPromise.then(() => {
+      eventsSubject.complete();
+    }, err => {
+      eventsSubject.error(err);
+    });
+
+    let currentLine = "";
+
+    eventsPromise.childProcess.stdout.on('data', chunk => {
+      let chunkStr = chunk.toString();
+      let newLineIndex = -1;
+
+      do {
+        newLineIndex = chunkStr.indexOf('\n');
+
+        if(newLineIndex > -1) {
+          currentLine += chunkStr.substr(0, newLineIndex);
+          chunkStr = chunkStr.substr(newLineIndex);
+
+          let eventObj = JSON.parse(currentLine);
+          eventsSubject.next(eventObj);
+
+          currentLine = "";
+        } else {
+          currentLine += chunkStr;
+          break;
+        }
+      } while(newLineIndex > -1);
+
+    });
+
+    return makeDtObservable(
+      eventsSubject.asObservable(),
+      eventsPromise.childProcess
+    );
+  }
+
+  /**
+   * Execute a command in a running container
+   */
+  exec(service: string, command: string, args?: Array<string|number>): DockerToolboxPromise<void>;
+
+  /**
+   * Execute a command in a running container
+   */
+  exec(options: IDockerComposeExecOptions, service: string, command: string, args?: Array<string|number>): DockerToolboxPromise<void>;
+
+  exec(...args: any[]): DockerToolboxPromise<void> {
+    let options: IDockerComposeExecOptions = {};
+    let optArgs: string[] = [];
+    let service: string;
+    let command: string;
+    let runArgs: Array<string|number> = [];
 
     if(args.length > 0) {
-      if(typeof args[0] === "string") {
+      if(typeof args[0] === 'string') {
+        service = args[0];
+        command = args[1] || '';
+        runArgs = args.slice(2);
+      } else {
+        options = args[0];
+        service = args[1];
+        command = args[2] || '';
+        runArgs = args.slice(3);
+      }
+
+      if(options.disablePseudoTty) {
+        optArgs.push('-T');
+      }
+
+      delete options.disablePseudoTty;
+
+      optArgs = optionsToArgs(options).concat(optArgs);
+    }
+
+    return this._spawn('exec', [].concat(
+      optArgs,
+      [command],
+      runArgs
+    ));
+  }
+
+  /**
+   * List images used by the created containers. Only ids.
+   */
+  images(idsOnly: true): DockerToolboxPromise<string[]>;
+
+  images(idsOnly?: boolean): DockerToolboxPromise<any> {
+    if(idsOnly) {
+      let imageIdsPromise = this._serviceCommandSpawn('images', {quiet: true});
+
+      let lineRead = new LineReadStream(imageIdsPromise.childProcess.stdout);
+      let imageIds: string[] = [];
+
+      lineRead.on('data', (line: string) => {
+        imageIds.push(line);
+      });
+
+      return makeDtPromise(
+        imageIdsPromise.then(() => imageIds),
+        imageIdsPromise.childProcess
+      );
+    } else {
+      throw new Error("Getting image details is unimplemented. Use image(true) instead to get image ids");
+    }
+  }
+
+  /**
+   * Force stop service containers.
+   */
+  kill(): DockerToolboxPromise<void>;
+
+  /**
+   * Force stop service containers.
+   */
+  kill(options: IDockerComposeKillOptions): DockerToolboxPromise<void>;
+
+  /**
+   * Force stop service containers.
+   */
+  kill(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * Force stop service containers.
+   */
+  kill(options: IDockerComposeKillOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  kill(...args: any[]): DockerToolboxPromise<void> {
+    let services: string[] = [];
+    let options: IDockerComposeKillOptions = {};
+    let optArgs: string[] = [];
+
+    if(args.length > 0) {
+      if(typeof args[0] === 'string') {
         services = args;
       } else {
         options = args[0];
+        args.splice(0, 1);
+        services = args;
+
+        if('signal' in options) {
+          optArgs.push('-s');
+          optArgs.push(options.signal);
+
+          delete options.signal;
+        }
       }
 
-      args.splice(0, 1);
-
-      services = args;
+      optArgs = optionsToArgs(options).concat(optArgs);
     }
 
-    const optArgs: string[] = optionsToArgs(options);
-
-    return this._spawn('build', [].concat(optArgs, services));
+    return this._spawn('kill', [].concat(
+      optArgs,
+      services
+    ));
   }
+
+  /**
+   * View output from containers.
+   */
+  logs(): DockerToolboxPromise<void>;
+
+  /**
+   * View output from containers.
+   */
+  logs(options: IDockerComposeLogsOptions): DockerToolboxPromise<void>;
+
+  /**
+   * View output from containers.
+   */
+  logs(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * View output from containers.
+   */
+  logs(options: IDockerComposeLogsOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  logs(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('logs', ...args);
+  }
+
+  /**
+   * Pause services.
+   */
+  pause(): DockerToolboxPromise<void>;
+
+  /**
+   * Pause services.
+   */
+  pause(...services: string[]): DockerToolboxPromise<void>;
+
+  pause(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('pause', ...args);
+  }
+
+  /**
+   * List containers.
+   */
+  ps(): DockerToolboxPromise<void>;
+
+  /**
+   * List containers.
+   */
+  ps(options: IDockerComposePsOptions): DockerToolboxPromise<void>;
+
+  /**
+   * List containers.
+   */
+  ps(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * List containers.
+   */
+  ps(options: IDockerComposePsOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  ps(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('ps', ...args);
+  }
+
+  /**
+   * Pulls images for services defined in a Compose file, but does not start 
+   * the containers.
+   */
+  pull();
+
+  /**
+   * Pulls images for services defined in a Compose file, but does not start 
+   * the containers.
+   */
+  pull(options: IDockerComposePullOptions);
+
+  /**
+   * Pulls images for services defined in a Compose file, but does not start 
+   * the containers.
+   */
+  pull(...services: string[]);
+
+  /**
+   * Pulls images for services defined in a Compose file, but does not start 
+   * the containers.
+   */
+  pull(options: IDockerComposePullOptions, ...services: string[]);
+
+  pull(...args: any[]) {
+    return this._serviceCommandSpawn('pull', ...args);
+  }
+
+  /**
+   * Pushes images for services.
+   */
+  push(): DockerToolboxPromise<void>;
+
+  /**
+   * Pushes images for services.
+   */
+  push(options: IDockerComposePushOptions): DockerToolboxPromise<void>;
+
+  /**
+   * Pushes images for services.
+   */
+  push(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * Pushes images for services.
+   */
+  push(options: IDockerComposePushOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  push(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('push', ...args);
+  }
+
+  /**
+   * Restart running containers.
+   */
+  restart(): DockerToolboxPromise<void>;
+
+  /**
+   * Restart running containers.
+   */
+  restart(options: IDockerComposeRestartOptions): DockerToolboxPromise<void>;
+
+  /**
+   * Restart running containers.
+   */
+  restart(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * Restart running containers.
+   */
+  restart(options: DockerToolboxPromise<void>, ...services: string[]): DockerToolboxPromise<void>;
+
+  restart(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('restart', ...args);
+  }
+
+  rm(): DockerToolboxPromise<void>;
+  
+  rm(options: IDockerComposeRmOptions): DockerToolboxPromise<void>;
+
+  rm(...services: string[]): DockerToolboxPromise<void>;
+
+  rm(options: IDockerComposeRmOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  rm(...args: any[]) {
+    let services: string[] = [];
+    let options: IDockerComposeRmOptions = {};
+    let optArgs: string[] = [];
+
+    if(args.length > 0) {
+      if(typeof args[0] === 'string') {
+        services = args;
+      } else {
+        options = args[0];
+        args.splice(0, 1);
+        services = args;
+
+        if(options.removeVolumes) {
+          optArgs.push('-v');
+        }
+
+        delete options.removeVolumes;
+      }
+
+      optArgs = optionsToArgs(options).concat(optArgs);
+    }
+
+    return this._spawn('rm', [].concat(
+      optArgs,
+      services
+    ));
+  }
+
+  /**
+   * Run a one-off command on a service.
+   */
+  run(service: string, command?: string, args?: Array<string|number>): DockerToolboxPromise<void>;
+
+  /**
+   * Run a one-off command on a service.
+   */
+  run(options: IDockerComposeRunOptions, service: string, command?: string, args?: Array<string|number>): DockerToolboxPromise<void>;
+
+  run(...args: any[]): DockerToolboxPromise<void> {
+    let options: IDockerComposeRunOptions = {};
+    let optArgs: string[] = [];
+    let service: string;
+    let command: string;
+    let runArgs: Array<string|number> = [];
+
+    if(args.length > 0) {
+      if(typeof args[0] === 'string') {
+        service = args[0];
+        command = args[1] || '';
+        runArgs = args.slice(2);
+      } else {
+        options = args[0];
+        service = args[1];
+        command = args[2] || '';
+        runArgs = args.slice(3);
+      }
+
+      if(options.disablePseudoTty) {
+        optArgs.push('-T');
+      }
+
+      delete options.disablePseudoTty;
+
+      optArgs = optionsToArgs(options).concat(optArgs);
+    }
+
+    return this._spawn('run', [].concat(
+      optArgs,
+      [command],
+      runArgs
+    ));
+  }
+
+  /**
+   * Start existing containers.
+   */
+  start(): DockerToolboxPromise<void>;
+
+  /**
+   * Start existing containers.
+   */
+  start(...services: string[]): DockerToolboxPromise<void>;
+
+  start(...services: string[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('start', ...services);
+  }
+
+  /**
+   * Stop running containers without removing them. They can be started again 
+   * with `start()`.
+   */
+  stop(): DockerToolboxPromise<void>;
+
+  /**
+   * Stop running containers without removing them. They can be started again 
+   * with `start()`.
+   */
+  stop(options: IDockerComposeStopOptions): DockerToolboxPromise<void>;
+
+  /**
+   * Stop running containers without removing them. They can be started again 
+   * with `start()`.
+   */
+  stop(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * Stop running containers without removing them. They can be started again 
+   * with `start()`.
+   */
+  stop(options: IDockerComposeStopOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  stop(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('stop', ...args);
+  }
+
+  /**
+   * Display the running processes
+   */
+  top(): DockerToolboxPromise<void>;
+
+  /**
+   * Display the running processes
+   */
+  top(...services: string[]): DockerToolboxPromise<void>;
+
+  top(...services: string[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('top', ...services);
+  }
+
+  /**
+   * Unpause services.
+   */
+  unpause(): DockerToolboxPromise<void>;
+
+  /**
+   * Unpause services.
+   */
+  unpause(...services: string[]): DockerToolboxPromise<void>;
+
+  unpause(...services: string[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('unpause', ...services);
+  }
+
+  /**
+   * Builds, (re)creates, starts, and attaches to containers for a service.
+   *
+   * Unless they are already running, this command also starts any linked 
+   * services.
+   *
+   * The `docker-compose up` command aggregates the output of each container. 
+   * When the command exits, all containers are stopped. Running
+   * `up({detach: true})` starts the containers in the background and leaves 
+   * them running.
+   *
+   * If there are existing containers for a service, and the service's 
+   * configuration or image was changed after the container's creation, 
+   * `up()` picks up the changes by stopping and recreating the 
+   * containers (preserving mounted volumes). To prevent Compose from picking 
+   * up changes, use the `noRecreate` flag.
+   *
+   * If you want to force Compose to stop and recreate all containers, use the
+   * `forceRecreate` flag.
+   */
+  up(): DockerToolboxPromise<void>;
+
+  /**
+   * Builds, (re)creates, starts, and attaches to containers for a service.
+   *
+   * Unless they are already running, this command also starts any linked 
+   * services.
+   *
+   * The `docker-compose up` command aggregates the output of each container. 
+   * When the command exits, all containers are stopped. Running
+   * `up({detach: true})` starts the containers in the background and leaves 
+   * them running.
+   *
+   * If there are existing containers for a service, and the service's 
+   * configuration or image was changed after the container's creation, 
+   * `up()` picks up the changes by stopping and recreating the 
+   * containers (preserving mounted volumes). To prevent Compose from picking 
+   * up changes, use the `noRecreate` flag.
+   *
+   * If you want to force Compose to stop and recreate all containers, use the
+   * `forceRecreate` flag.
+   */
+  up(options: IDockerComposeUpOptions): DockerToolboxPromise<void>;
+
+  /**
+   * Builds, (re)creates, starts, and attaches to containers for a service.
+   *
+   * Unless they are already running, this command also starts any linked 
+   * services.
+   *
+   * The `docker-compose up` command aggregates the output of each container. 
+   * When the command exits, all containers are stopped. Running
+   * `up({detach: true})` starts the containers in the background and leaves 
+   * them running.
+   *
+   * If there are existing containers for a service, and the service's 
+   * configuration or image was changed after the container's creation, 
+   * `up()` picks up the changes by stopping and recreating the 
+   * containers (preserving mounted volumes). To prevent Compose from picking 
+   * up changes, use the `noRecreate` flag.
+   *
+   * If you want to force Compose to stop and recreate all containers, use the
+   * `forceRecreate` flag.
+   */
+  up(...services: string[]): DockerToolboxPromise<void>;
+
+  /**
+   * Builds, (re)creates, starts, and attaches to containers for a service.
+   *
+   * Unless they are already running, this command also starts any linked 
+   * services.
+   *
+   * The `docker-compose up` command aggregates the output of each container. 
+   * When the command exits, all containers are stopped. Running
+   * `up({detach: true})` starts the containers in the background and leaves 
+   * them running.
+   *
+   * If there are existing containers for a service, and the service's 
+   * configuration or image was changed after the container's creation, 
+   * `up()` picks up the changes by stopping and recreating the 
+   * containers (preserving mounted volumes). To prevent Compose from picking 
+   * up changes, use the `noRecreate` flag.
+   *
+   * If you want to force Compose to stop and recreate all containers, use the
+   * `forceRecreate` flag.
+   */
+  up(options: IDockerComposeUpOptions, ...services: string[]): DockerToolboxPromise<void>;
+
+  up(...args: any[]): DockerToolboxPromise<void> {
+    return this._serviceCommandSpawn('up', ...args);
+  }
+
+  /**
+   * Show version informations
+   */
+  version(): DockerToolboxPromise<void>;
+
+  /**
+   * Show version informations
+   * @return version string
+   */
+  version(options: {short: true}): DockerToolboxPromise<string>;
+
+  /**
+   * Show version informations
+   */
+  version(options: {short: false}): DockerToolboxPromise<void>;
+
+  version(options: IDockerComposeVersionOptions): DockerToolboxPromise<void|string>;
+
+  version(options?: IDockerComposeVersionOptions): DockerToolboxPromise<void|string> {
+    let versionPromise = this._serviceCommandSpawn('version', options || {});
+
+    if(options && options.short) {
+      let versionString = '';
+
+      versionPromise.childProcess.stdout.on('data', chunk => {
+        versionString += chunk.toString();
+      });
+
+      return makeDtPromise(
+        versionPromise.then(() => versionString.trim()),
+        versionPromise.childProcess
+      );
+    }
+
+    return versionPromise;
+  }
+
 }
 
 export interface IDockerMachineOptions {

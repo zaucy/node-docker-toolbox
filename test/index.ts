@@ -42,3 +42,31 @@ test('docker-compose build', async t => {
 
   t.pass();
 });
+
+test('docker-compose version', async t => {
+  const configPath = path.resolve(__dirname, 'docker-compose.yml');
+  const compose = new DockerCompose({configPath});
+  const buildPromise = compose.version({});
+
+  buildPromise.childProcess.stdout.on('data', (chunk) => {
+    t.log(chunk.toString().trim());
+  });
+
+  buildPromise.childProcess.stderr.on('data', (chunk) => {
+    t.log(chunk.toString().trim());
+  });
+
+  await buildPromise;
+
+  t.pass();
+});
+
+test('docker-compose version short', async t => {
+  const configPath = path.resolve(__dirname, 'docker-compose.yml');
+  const compose = new DockerCompose({configPath});
+  const version = await compose.version({short: true});
+
+  t.truthy(version);
+
+  t.pass();
+});
