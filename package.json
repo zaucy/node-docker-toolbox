@@ -1,6 +1,6 @@
 {
   "name": "docker-toolbox",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "wrapper for docker-compose and docker-machine",
   "main": "lib/index",
   "repository": "https://github.com/zaucy/node-docker-toolbox.git",
