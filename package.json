@@ -10,7 +10,7 @@
     "test": "ava",
     "start": "node lib/index",
     "build": "tsc -p tsconfig.release.json",
-    "prepublishOnly": "rimraf lib && yarn build && yarn docs",
+    "prepublishOnly": "rimraf lib && yarn build && yarn docs && git add docs",
     "dev": "tsc-watch --onSuccess \"node --require source-map-support/register ./lib/index.js\"",
     "docs": "rimraf ./docs && typedoc --options typedoc.json ./src"
   },
