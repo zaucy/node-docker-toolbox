@@ -62,32 +62,9 @@
 	<div class="row">
 		<div class="col-8 col-content">
 			<div class="tsd-panel tsd-typography">
-				<h1 id="node-docker-toolbox">node-docker-toolbox</h1>
+				<h1 id="docker-toolbox">docker-toolbox</h1>
 				<p>Node.js wrapper for docker-compose and docker-machine</p>
-				<h2 id="example">Example</h2>
-				<p>Build on a docker machine with docker compose</p>
-				<pre><code class="lang-TypeScript"><span class="hljs-keyword">import</span> {DockerMachine, DockerCompose} <span class="hljs-keyword">from</span> <span class="hljs-string">'docker-toolbox'</span>;
-
-<span class="hljs-keyword">async</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">start</span>(<span class="hljs-params"></span>) </span>{
-  <span class="hljs-keyword">const</span> machine = <span class="hljs-keyword">await</span> DockerMachine.get(<span class="hljs-string">'machine-name'</span>);
-  <span class="hljs-keyword">const</span> compose = <span class="hljs-keyword">new</span> DockerCompose({machine});
-
-  <span class="hljs-keyword">await</span> compose.build();
-
-  <span class="hljs-comment">// If you want to see the output the ChildProcess is exposed as a property on</span>
-  <span class="hljs-comment">// the promise.</span>
-
-  <span class="hljs-keyword">const</span> buildPromise = compose.build();
-
-  buildPromise.childProcess.stdout.pipe(process.stdout);
-  buildPromise.childProcess.stderr.pipe(process.stderr);
-
-  <span class="hljs-keyword">await</span> buildPromise;
-  <span class="hljs-built_in">console</span>.log(<span class="hljs-string">"jobs done!"</span>);
-}
-
-start();
-</code></pre>
+				<p><a href="https://zaucy.github.io/node-docker-toolbox/">Documentation</a></p>
 			</div>
 		</div>
 		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">
