@@ -18,7 +18,7 @@ export function optionsToArgs
   for(let key in options) {
     let optionValue = options[key];
     
-    key = key.replace(/([A-Z])/, '-$1').toLowerCase();
+    key = key.replace(/([A-Z])/g, '-$1').toLowerCase();
     const optKey = '--' + prefix + key;
 
     if(typeof optionValue === 'boolean') {
